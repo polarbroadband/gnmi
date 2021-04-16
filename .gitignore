@@ -1,0 +1,59 @@
+# Node.js Dependency directories
+node_modules/
+.npm
+
+jspm_packages/
+web_modules/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# dotenv environment variables file
+.env
+.env.test
+
+# parcel-bundler cache (https://parceljs.org/)
+.cache
+
+# Next.js build output
+.next
+
+# Go
+vendor/
+cert/
+key/
+
+dev.yml
+debug.yml
+ae.yml
+be.yml
+beta.yml
+fe.yml
+
+**/*.dev
+
+**/*-build*
+**/*.env
+
+**/*.key
+**/*.pem
+**/*.crt
+**/*.cert
+
+# temp files
+temp/
+
+# compiled output
+dist/
+tmp/
+out-tsc/
+
+# IDEs and editors
+.vscode/*
+.project

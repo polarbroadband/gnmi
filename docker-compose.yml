@@ -1,0 +1,15 @@
+version: '3.3'
+
+services:
+
+  gnmi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      GRPC_GO_LOG_VERBOSITY_LEVEL: 99
+      GRPC_GO_LOG_SEVERITY_LEVEL: "info"
+    network_mode: "host"
+    volumes:
+      - .:/appsrc
+    command: tail -f /dev/null
