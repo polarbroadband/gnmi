@@ -106,9 +106,13 @@ func receiveNotifications(subscribeClient pb.GNMI_SubscribeClient) (bool, error)
 			//log.Info("SyncResponse received")
 			return false, nil
 		case *pb.SubscribeResponse_Update:
-			var ct interface{}
-			json.Unmarshal(res.GetUpdate().GetUpdate()[0].GetVal().GetJsonVal(), &ct) // string
-			fmt.Printf("%v %v\n", res.GetUpdate().GetTimestamp(), ct)
+
+			for uf, update := range res.GetUpdate().GetUpdate() {
+				var ct interface{}
+				json.Unmarshal(update.GetVal().GetJsonVal(), &ct) // string
+				fmt.Printf("--%v-- %v %v %v\n", uf, res.GetUpdate().GetPrefix(), res.GetUpdate().GetTimestamp(), ct)
+
+			}
 		default:
 			return false, errors.New("unexpected response type")
 		}
@@ -237,8 +241,8 @@ func main() {
 			log.Fatalf("unable to assembly update item: %v", err)
 		}
 		setRequest := &pb.SetRequest{
-			Delete:  nil,
-			Replace: nil,
+			Delete:  nil, //[]*pb.Path
+			Replace: nil, //[]*pb.Update
 			Update: []*pb.Update{{
 				Path: pbPath,
 				Val: &pb.TypedValue{
@@ -263,6 +267,13 @@ func main() {
 			log.Fatalf("error in parsing xpath %q to gnmi path", XPATH)
 		}
 		pbPathList := []*pb.Path{pbPath}
+
+		secP, _ := xpath.ToGNMIPath("/configure/port[port-id=1/1/c11/1]")
+		pbPathList = append(pbPathList, secP)
+
+		secP, _ = xpath.ToGNMIPath("/state/router[router-name=Base]/static-routes")
+		pbPathList = append(pbPathList, secP)
+
 		pbModelDataList := []*pb.ModelData{}
 
 		getRequest := &pb.GetRequest{
@@ -276,12 +287,14 @@ func main() {
 		if err != nil {
 			log.Fatalf("Get failed: %v", err)
 		}
-
+		nf := 0
 		for _, notification := range getResponse.GetNotification() {
+			fmt.Printf("\n****** notification: %v\n", nf)
+			nf++
 			for _, update := range notification.GetUpdate() {
 				var res map[string]interface{}
 				json.Unmarshal(update.GetVal().GetJsonVal(), &res)
-				pretty.Printf("\nGetResponse *****************\n%# v\n", res)
+				pretty.Printf("\nGetResponse *****************%v\n%# v\n", notification.GetPrefix(), res)
 				fmt.Printf("\n\nport %s %s\n\n", res["port-id"], res["description"])
 			}
 		}
@@ -297,14 +310,26 @@ func main() {
 		if err != nil {
 			log.Fatalf("error in parsing xpath %q to gnmi path", XPATH_STATE)
 		}
+
+		secP, _ := xpath.ToGNMIPath("/state/port[port-id=1/1/c11/1]/statistics")
+
 		subscriptionListMode := pb.SubscriptionList_STREAM // pb.SubscriptionList_POLL, pb.SubscriptionList_ONCE
-		subscriptions := []*pb.Subscription{{
-			Path:           pbPath,
-			Mode:           pb.SubscriptionMode_SAMPLE, // pb.SubscriptionMode_ON_CHANGE, pb.SubscriptionMode_TARGET_DEFINED
-			SampleInterval: 5000000000,                 // ns, unit64
-			//SuppressRedundant: true,
-			//HeartbeatInterval: 30000000000, // ns, unit64
-		}}
+		subscriptions := []*pb.Subscription{
+			{
+				Path:           pbPath,
+				Mode:           pb.SubscriptionMode_SAMPLE, // pb.SubscriptionMode_ON_CHANGE, pb.SubscriptionMode_TARGET_DEFINED
+				SampleInterval: 5000000000,                 // ns, unit64
+				//SuppressRedundant: true,
+				//HeartbeatInterval: 30000000000, // ns, unit64
+			},
+			{
+				Path:           secP,
+				Mode:           pb.SubscriptionMode_SAMPLE, // pb.SubscriptionMode_ON_CHANGE, pb.SubscriptionMode_TARGET_DEFINED
+				SampleInterval: 1000000000,                 // ns, unit64
+				//SuppressRedundant: true,
+				//HeartbeatInterval: 30000000000, // ns, unit64
+			},
+		}
 
 		request := &pb.SubscribeRequest{
 			Request: &pb.SubscribeRequest_Subscribe{
