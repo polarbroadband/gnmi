@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+option go_package = "github.com/polarbroadband/gnmi/pkg/gnmiprobe";
+
+package gnmiprobe;
+
+//import "google/protobuf/struct.proto";
+//import "google/protobuf/timestamp.proto";
+//import "runner.proto";
+
+import "github.com/openconfig/gnmi/proto/gnmi/gnmi.proto";
+
+// stateless gnmi probe service
+service Probe {
+  // healthckeck
+  rpc Healtz (HealtzReq) returns (SvrStat) {}
+  // get gNMI Probe target capabilities
+  rpc GetCapability(ProbeRequest) returns (gnmi.CapabilityResponse) {}
+  // gNMI Probe request and response data stream
+  rpc ConnectProbe (stream ProbeRequest) returns (stream ProbeResponse) {}
+}
+
+message ProbeRequest {
+  int64 Cid = 1;
+  int64 Timeout = 2;  // second
+  oneof request {
+    ProbeConn conn = 5;
+    gnmi.SetRequest set = 6;
+    gnmi.GetRequest get = 7;
+    gnmi.SubscribeRequest sub = 8;
+  }
+}
+
+message ProbeConn {
+  bool TLS = 1;
+  string Cer = 2;   // ca cert file name
+  string Host = 3;
+  string Port = 4;
+  string Usr = 5;
+  string Pwd = 6;
+}
+
+message ProbeResponse {
+  int64 Cid = 1;
+  string Error = 2;
+  repeated gnmi.Notification Resp = 3;
+}
+
+
+message SvrStat {
+  string Host = 1;
+  string Release = 2;
+  int64 Load = 3;
+}
+
+message HealtzReq {
+}

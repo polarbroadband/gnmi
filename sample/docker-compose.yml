@@ -4,7 +4,7 @@ services:
 
   srv:
     build:
-      context: ./srv
+      context: ../probe
       dockerfile: Dockerfile
     environment:
       GRPC_GO_LOG_VERBOSITY_LEVEL: 99
@@ -12,7 +12,7 @@ services:
     env_file:
       - ./dev.env
     volumes:
-      - ./srv:/appsrc
+      - ../probe:/appsrc
     command: tail -f /dev/null
 
   clnt:

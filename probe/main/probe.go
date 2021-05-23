@@ -14,11 +14,8 @@ import (
 	"sync"
 	"time"
 
-	//pb "github.com/polarbroadband/gnmi"
-	//pb "../../protobuf/gnmi/pb/gnmiprobe"
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
-	pb "gitlab01.nfvdev.teluslabs.net/t854359/protobuf/gnmiprobe"
-	runnerpb "gitlab01.nfvdev.teluslabs.net/t854359/protobuf/runner"
+	pb "github.com/polarbroadband/gnmi/pkg/gnmiprobe"
 
 	"github.com/polarbroadband/goto/util"
 
@@ -176,9 +173,9 @@ func (wkr *WorkerNode) ready(w http.ResponseWriter, r *http.Request) {
 }
 
 // Healtz response gRPC health check
-func (wkr *WorkerNode) Healtz(ctx context.Context, r *runnerpb.HealtzReq) (*runnerpb.SvrStat, error) {
+func (wkr *WorkerNode) Healtz(ctx context.Context, r *pb.HealtzReq) (*pb.SvrStat, error) {
 	//_e := util.NewExeErr("Healtz", HOST, "gRPC_API")
-	return &runnerpb.SvrStat{
+	return &pb.SvrStat{
 		Host:    HOST,
 		Release: RELEASE,
 		Load:    wkr.Sessions(),
