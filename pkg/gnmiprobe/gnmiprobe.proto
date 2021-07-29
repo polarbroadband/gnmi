@@ -14,10 +14,17 @@ import "github.com/openconfig/gnmi/proto/gnmi/gnmi.proto";
 service Probe {
   // healthckeck
   rpc Healtz (HealtzReq) returns (SvrStat) {}
-  // get gNMI Probe target capabilities
-  rpc GetCapability(ProbeRequest) returns (gnmi.CapabilityResponse) {}
-  // gNMI Probe request and response data stream
+  // gNMI Probe bidirectional streaming
   rpc ConnectProbe (stream ProbeRequest) returns (stream ProbeResponse) {}
+
+  // gNMI Probe connection multiplexing
+  rpc Connect(ProbeConn) returns (ProbeBase) {}
+  rpc Disconnect(ProbeBase) returns (OprStat) {}
+  rpc Capability(ProbeBase) returns (gnmi.CapabilityResponse) {}
+  rpc Get(GetRequest) returns (gnmi.GetResponse) {}
+  rpc Set(SetRequest) returns (gnmi.SetResponse) {}
+  rpc Subscribe(SubscribeRequest) returns (stream gnmi.SubscribeResponse) {}
+
 }
 
 message ProbeRequest {
@@ -54,4 +61,27 @@ message SvrStat {
 }
 
 message HealtzReq {
+}
+
+message ProbeBase {
+  string ID = 1;
+}
+
+message OprStat {
+  string Status = 1;
+}
+
+message GetRequest {
+  string ID = 1;
+  gnmi.GetRequest Request = 2;
+}
+
+message SetRequest {
+  string ID = 1;
+  gnmi.SetRequest Request = 2;
+}
+
+message SubscribeRequest {
+  string ID = 1;
+  gnmi.SubscribeRequest Request = 2;
 }

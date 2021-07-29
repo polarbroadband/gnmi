@@ -21,10 +21,15 @@ const _ = grpc.SupportPackageIsVersion7
 type ProbeClient interface {
 	// healthckeck
 	Healtz(ctx context.Context, in *HealtzReq, opts ...grpc.CallOption) (*SvrStat, error)
-	// get gNMI Probe target capabilities
-	GetCapability(ctx context.Context, in *ProbeRequest, opts ...grpc.CallOption) (*gnmi.CapabilityResponse, error)
-	// gNMI Probe request and response data stream
+	// gNMI Probe bidirectional streaming
 	ConnectProbe(ctx context.Context, opts ...grpc.CallOption) (Probe_ConnectProbeClient, error)
+	// gNMI Probe connection multiplexing
+	Connect(ctx context.Context, in *ProbeConn, opts ...grpc.CallOption) (*ProbeBase, error)
+	Disconnect(ctx context.Context, in *ProbeBase, opts ...grpc.CallOption) (*OprStat, error)
+	Capability(ctx context.Context, in *ProbeBase, opts ...grpc.CallOption) (*gnmi.CapabilityResponse, error)
+	Get(ctx context.Context, in *GetRequest, opts ...grpc.CallOption) (*gnmi.GetResponse, error)
+	Set(ctx context.Context, in *SetRequest, opts ...grpc.CallOption) (*gnmi.SetResponse, error)
+	Subscribe(ctx context.Context, in *SubscribeRequest, opts ...grpc.CallOption) (Probe_SubscribeClient, error)
 }
 
 type probeClient struct {
@@ -38,15 +43,6 @@ func NewProbeClient(cc grpc.ClientConnInterface) ProbeClient {
 func (c *probeClient) Healtz(ctx context.Context, in *HealtzReq, opts ...grpc.CallOption) (*SvrStat, error) {
 	out := new(SvrStat)
 	err := c.cc.Invoke(ctx, "/gnmiprobe.Probe/Healtz", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *probeClient) GetCapability(ctx context.Context, in *ProbeRequest, opts ...grpc.CallOption) (*gnmi.CapabilityResponse, error) {
-	out := new(gnmi.CapabilityResponse)
-	err := c.cc.Invoke(ctx, "/gnmiprobe.Probe/GetCapability", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -84,16 +80,98 @@ func (x *probeConnectProbeClient) Recv() (*ProbeResponse, error) {
 	return m, nil
 }
 
+func (c *probeClient) Connect(ctx context.Context, in *ProbeConn, opts ...grpc.CallOption) (*ProbeBase, error) {
+	out := new(ProbeBase)
+	err := c.cc.Invoke(ctx, "/gnmiprobe.Probe/Connect", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *probeClient) Disconnect(ctx context.Context, in *ProbeBase, opts ...grpc.CallOption) (*OprStat, error) {
+	out := new(OprStat)
+	err := c.cc.Invoke(ctx, "/gnmiprobe.Probe/Disconnect", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *probeClient) Capability(ctx context.Context, in *ProbeBase, opts ...grpc.CallOption) (*gnmi.CapabilityResponse, error) {
+	out := new(gnmi.CapabilityResponse)
+	err := c.cc.Invoke(ctx, "/gnmiprobe.Probe/Capability", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *probeClient) Get(ctx context.Context, in *GetRequest, opts ...grpc.CallOption) (*gnmi.GetResponse, error) {
+	out := new(gnmi.GetResponse)
+	err := c.cc.Invoke(ctx, "/gnmiprobe.Probe/Get", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *probeClient) Set(ctx context.Context, in *SetRequest, opts ...grpc.CallOption) (*gnmi.SetResponse, error) {
+	out := new(gnmi.SetResponse)
+	err := c.cc.Invoke(ctx, "/gnmiprobe.Probe/Set", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *probeClient) Subscribe(ctx context.Context, in *SubscribeRequest, opts ...grpc.CallOption) (Probe_SubscribeClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Probe_ServiceDesc.Streams[1], "/gnmiprobe.Probe/Subscribe", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &probeSubscribeClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Probe_SubscribeClient interface {
+	Recv() (*gnmi.SubscribeResponse, error)
+	grpc.ClientStream
+}
+
+type probeSubscribeClient struct {
+	grpc.ClientStream
+}
+
+func (x *probeSubscribeClient) Recv() (*gnmi.SubscribeResponse, error) {
+	m := new(gnmi.SubscribeResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // ProbeServer is the server API for Probe service.
 // All implementations must embed UnimplementedProbeServer
 // for forward compatibility
 type ProbeServer interface {
 	// healthckeck
 	Healtz(context.Context, *HealtzReq) (*SvrStat, error)
-	// get gNMI Probe target capabilities
-	GetCapability(context.Context, *ProbeRequest) (*gnmi.CapabilityResponse, error)
-	// gNMI Probe request and response data stream
+	// gNMI Probe bidirectional streaming
 	ConnectProbe(Probe_ConnectProbeServer) error
+	// gNMI Probe connection multiplexing
+	Connect(context.Context, *ProbeConn) (*ProbeBase, error)
+	Disconnect(context.Context, *ProbeBase) (*OprStat, error)
+	Capability(context.Context, *ProbeBase) (*gnmi.CapabilityResponse, error)
+	Get(context.Context, *GetRequest) (*gnmi.GetResponse, error)
+	Set(context.Context, *SetRequest) (*gnmi.SetResponse, error)
+	Subscribe(*SubscribeRequest, Probe_SubscribeServer) error
 	mustEmbedUnimplementedProbeServer()
 }
 
@@ -104,11 +182,26 @@ type UnimplementedProbeServer struct {
 func (UnimplementedProbeServer) Healtz(context.Context, *HealtzReq) (*SvrStat, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Healtz not implemented")
 }
-func (UnimplementedProbeServer) GetCapability(context.Context, *ProbeRequest) (*gnmi.CapabilityResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetCapability not implemented")
-}
 func (UnimplementedProbeServer) ConnectProbe(Probe_ConnectProbeServer) error {
 	return status.Errorf(codes.Unimplemented, "method ConnectProbe not implemented")
+}
+func (UnimplementedProbeServer) Connect(context.Context, *ProbeConn) (*ProbeBase, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Connect not implemented")
+}
+func (UnimplementedProbeServer) Disconnect(context.Context, *ProbeBase) (*OprStat, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Disconnect not implemented")
+}
+func (UnimplementedProbeServer) Capability(context.Context, *ProbeBase) (*gnmi.CapabilityResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Capability not implemented")
+}
+func (UnimplementedProbeServer) Get(context.Context, *GetRequest) (*gnmi.GetResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Get not implemented")
+}
+func (UnimplementedProbeServer) Set(context.Context, *SetRequest) (*gnmi.SetResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Set not implemented")
+}
+func (UnimplementedProbeServer) Subscribe(*SubscribeRequest, Probe_SubscribeServer) error {
+	return status.Errorf(codes.Unimplemented, "method Subscribe not implemented")
 }
 func (UnimplementedProbeServer) mustEmbedUnimplementedProbeServer() {}
 
@@ -141,24 +234,6 @@ func _Probe_Healtz_Handler(srv interface{}, ctx context.Context, dec func(interf
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Probe_GetCapability_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ProbeRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ProbeServer).GetCapability(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/gnmiprobe.Probe/GetCapability",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProbeServer).GetCapability(ctx, req.(*ProbeRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _Probe_ConnectProbe_Handler(srv interface{}, stream grpc.ServerStream) error {
 	return srv.(ProbeServer).ConnectProbe(&probeConnectProbeServer{stream})
 }
@@ -185,6 +260,117 @@ func (x *probeConnectProbeServer) Recv() (*ProbeRequest, error) {
 	return m, nil
 }
 
+func _Probe_Connect_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProbeConn)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProbeServer).Connect(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/gnmiprobe.Probe/Connect",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProbeServer).Connect(ctx, req.(*ProbeConn))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Probe_Disconnect_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProbeBase)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProbeServer).Disconnect(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/gnmiprobe.Probe/Disconnect",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProbeServer).Disconnect(ctx, req.(*ProbeBase))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Probe_Capability_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProbeBase)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProbeServer).Capability(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/gnmiprobe.Probe/Capability",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProbeServer).Capability(ctx, req.(*ProbeBase))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Probe_Get_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProbeServer).Get(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/gnmiprobe.Probe/Get",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProbeServer).Get(ctx, req.(*GetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Probe_Set_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProbeServer).Set(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/gnmiprobe.Probe/Set",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProbeServer).Set(ctx, req.(*SetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Probe_Subscribe_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(SubscribeRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ProbeServer).Subscribe(m, &probeSubscribeServer{stream})
+}
+
+type Probe_SubscribeServer interface {
+	Send(*gnmi.SubscribeResponse) error
+	grpc.ServerStream
+}
+
+type probeSubscribeServer struct {
+	grpc.ServerStream
+}
+
+func (x *probeSubscribeServer) Send(m *gnmi.SubscribeResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 // Probe_ServiceDesc is the grpc.ServiceDesc for Probe service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -197,8 +383,24 @@ var Probe_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Probe_Healtz_Handler,
 		},
 		{
-			MethodName: "GetCapability",
-			Handler:    _Probe_GetCapability_Handler,
+			MethodName: "Connect",
+			Handler:    _Probe_Connect_Handler,
+		},
+		{
+			MethodName: "Disconnect",
+			Handler:    _Probe_Disconnect_Handler,
+		},
+		{
+			MethodName: "Capability",
+			Handler:    _Probe_Capability_Handler,
+		},
+		{
+			MethodName: "Get",
+			Handler:    _Probe_Get_Handler,
+		},
+		{
+			MethodName: "Set",
+			Handler:    _Probe_Set_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
@@ -207,6 +409,11 @@ var Probe_ServiceDesc = grpc.ServiceDesc{
 			Handler:       _Probe_ConnectProbe_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
+		},
+		{
+			StreamName:    "Subscribe",
+			Handler:       _Probe_Subscribe_Handler,
+			ServerStreams: true,
 		},
 	},
 	Metadata: "gnmiprobe.proto",

@@ -1,0 +1,46 @@
+version: '3.3'
+
+services:
+
+  srv:
+    build:
+      context: ./srv
+      dockerfile: Dockerfile
+    environment:
+      GRPC_GO_LOG_VERBOSITY_LEVEL: 99
+      GRPC_GO_LOG_SEVERITY_LEVEL: "info"
+    env_file:
+      - ./dev.env
+    volumes:
+      - ./srv:/appsrc
+    command: tail -f /dev/null
+
+  clnt1:
+    build:
+      context: ./clnt
+      dockerfile: Dockerfile
+    env_file:
+      - ./dev.env
+    volumes:
+      - ./clnt:/appsrc
+    command: tail -f /dev/null
+
+  clnt2:
+    build:
+      context: ./clnt
+      dockerfile: Dockerfile
+    env_file:
+      - ./dev.env
+    volumes:
+      - ./clnt:/appsrc
+    command: tail -f /dev/null
+
+  clnt3:
+    build:
+      context: ./clnt
+      dockerfile: Dockerfile
+    env_file:
+      - ./dev.env
+    volumes:
+      - ./clnt:/appsrc
+    command: tail -f /dev/null

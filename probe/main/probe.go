@@ -26,6 +26,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -68,7 +69,14 @@ type Nest struct {
 	nLock  *sync.Mutex
 }
 
-// RemoveProbe removes the idle probe instance from the nest
+func (nest *Nest) DisconnectAll() {
+	nest.nLock.Lock()
+	for _, p := range nest.Probes {
+		p.Target.Close()
+	}
+	nest.nLock.Unlock()
+}
+
 func (nest *Nest) RemoveProbe(id string) {
 	nest.nLock.Lock()
 	delete(nest.Probes, id)
@@ -79,7 +87,12 @@ func (nest *Nest) AddProbe(id string, r *Probe) {
 	nest.nLock.Lock()
 	defer nest.nLock.Unlock()
 	nest.Probes[id] = r
-	log.Infof("new probe %s", id)
+}
+
+func (nest *Nest) GetProbe(id string) *Probe {
+	nest.nLock.Lock()
+	defer nest.nLock.Unlock()
+	return nest.Probes[id]
 }
 
 func (nest *Nest) Sessions() int64 {
@@ -103,10 +116,17 @@ func main() {
 			NoAuth: []string{
 				"/gnmiprobe.Probe/Healtz",
 				"/gnmiprobe.Probe/ConnectProbe",
+				"/gnmiprobe.Probe/Connect",
+				"/gnmiprobe.Probe/Disconnect",
+				"/gnmiprobe.Probe/Capability",
+				"/gnmiprobe.Probe/Get",
+				"/gnmiprobe.Probe/Set",
+				"/gnmiprobe.Probe/Subscribe",
 			},
 			Log: log.WithField("owner", HOST),
 		},
 	}
+	defer wkr.Nest.DisconnectAll()
 
 	// setup and run gRPC server
 	grpcListener, err := net.Listen("tcp", ":50051")
@@ -119,7 +139,7 @@ func main() {
 		wkr.Log.WithError(err).Fatal("gRPC server fail: invalid TLS keys")
 	}
 
-	grpcSvr := grpc.NewServer(grpc.Creds(grpcTLS), grpc.UnaryInterceptor(wkr.AuthGrpcUnary))
+	grpcSvr := grpc.NewServer(grpc.Creds(grpcTLS), grpc.UnaryInterceptor(wkr.AuthGrpcUnary), grpc.StreamInterceptor(wkr.AuthGrpcStream))
 
 	// gRPC WorkerNode server
 	pb.RegisterProbeServer(grpcSvr, &wkr)
@@ -165,8 +185,8 @@ func (wkr *WorkerNode) ready(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	_e := util.NewExeErr("ready", HOST, "rest_API")
 	s := wkr.Sessions()
-	if s >= SESSION_MAX {
-		wkr.Error(w, 503, _e.String(fmt.Sprintf("%v sessions active, reach limit: %v", s, SESSION_MAX)))
+	if s > SESSION_MAX {
+		wkr.Error(w, 503, fmt.Sprintf("%s overload, active sessions: %v, threshold: %v", HOST, s, SESSION_MAX))
 	} else if err := json.NewEncoder(w).Encode(map[string]interface{}{"status": "done", "sessions": s}); err != nil {
 		wkr.Error(w, 500, _e.String("erroneous api response", err))
 	}
@@ -246,7 +266,7 @@ func (wkr *WorkerNode) ConnectProbe(stream pb.Probe_ConnectProbeServer) error {
 		return wkr.Errpc(codes.FailedPrecondition, _e.String("missing ProbeConn request"))
 	}
 	url := sc.GetHost() + ":" + sc.GetPort()
-	conn, err := ConnTarget(sc)
+	conn, err := ConnTarget(stream.Context(), sc)
 	if err != nil {
 		return wkr.Errpc(codes.Unavailable, _e.String("unable to connect target "+url, err))
 	}
@@ -310,10 +330,147 @@ func (wkr *WorkerNode) ConnectProbe(stream pb.Probe_ConnectProbeServer) error {
 	}
 }
 
+// Connect set up target connection and initialize Probe instance
+func (wkr *WorkerNode) Connect(ctx context.Context, r *pb.ProbeConn) (*pb.ProbeBase, error) {
+	targetAddr := r.GetHost() + ":" + r.GetPort()
+	_e := util.NewExeErr("Connect", HOST, "gNMI_target_"+targetAddr)
+	p, _ := peer.FromContext(ctx)
+	conn, err := ConnTarget(ctx, r)
+	if err != nil {
+		return nil, wkr.Errpc(codes.Unavailable, _e.String(fmt.Sprintf(" gNMI Probe %s unable to connect target %s for client %s", HOST, targetAddr, p.Addr.String()), err))
+	}
+	// init Probe instance
+	probe := Probe{
+		ProbeConn:  r,
+		ClientAddr: p.Addr.String(),
+		Target:     conn,
+		Handle:     gnmipb.NewGNMIClient(conn),
+		Start:      time.Now().UTC(),
+	}
+	pid := util.RandString(10)
+	wkr.AddProbe(pid, &probe)
+	log.Infof("Probe %s init, target %s connected, transport state: %v", pid, targetAddr, conn.GetState())
+
+	return &pb.ProbeBase{ID: pid}, nil
+}
+
+// Disconnect close target connection and remove Probe instance
+func (wkr *WorkerNode) Disconnect(ctx context.Context, r *pb.ProbeBase) (*pb.OprStat, error) {
+	//_e := util.NewExeErr("Disonnect", HOST, "gRPC_API")
+	probe := wkr.GetProbe(r.GetID())
+	if probe != nil {
+		probe.Target.Close()
+		wkr.RemoveProbe(r.GetID())
+		log.Infof("target %s:%s disconnected, probe %s closed", probe.GetHost(), probe.GetPort(), r.GetID())
+		return &pb.OprStat{Status: "done"}, nil
+	}
+	return &pb.OprStat{Status: "nonexist"}, nil
+}
+
+// Capability implement target Capability
+func (wkr *WorkerNode) Capability(channelCtx context.Context, r *pb.ProbeBase) (*gnmipb.CapabilityResponse, error) {
+	_e := util.NewExeErr("Capability", HOST, r.GetID())
+	probe := wkr.GetProbe(r.GetID())
+	if probe == nil {
+		return nil, wkr.Errpc(codes.InvalidArgument, _e.String("not exist"))
+	}
+
+	ctx, cancel := context.WithTimeout(channelCtx, time.Second*10) // default gNMI Capability timeout 10s
+	defer cancel()
+
+	result, err := probe.Handle.Capabilities(probe.Auth(ctx), &gnmipb.CapabilityRequest{})
+	if err != nil {
+		err = wkr.Errpc(codes.Unavailable, _e.String(probe.Host+":"+probe.Port, err))
+	}
+	return result, err
+}
+
+// Get implement target GET
+func (wkr *WorkerNode) Get(channelCtx context.Context, r *pb.GetRequest) (*gnmipb.GetResponse, error) {
+	_e := util.NewExeErr("Get", HOST, r.GetID())
+	probe := wkr.GetProbe(r.GetID())
+	if probe == nil {
+		return nil, wkr.Errpc(codes.InvalidArgument, _e.String("not exist"))
+	}
+
+	ctx, cancel := context.WithTimeout(channelCtx, time.Second*900) // default gNMI GET timeout 900s
+	defer cancel()
+
+	result, err := probe.Handle.Get(probe.Auth(ctx), r.GetRequest())
+	if err != nil {
+		err = wkr.Errpc(codes.Unavailable, _e.String(probe.Host+":"+probe.Port, err))
+	}
+	return result, err
+}
+
+// Set implement target SET
+func (wkr *WorkerNode) Set(channelCtx context.Context, r *pb.SetRequest) (*gnmipb.SetResponse, error) {
+	_e := util.NewExeErr("Set", HOST, r.GetID())
+	probe := wkr.GetProbe(r.GetID())
+	if probe == nil {
+		return nil, wkr.Errpc(codes.InvalidArgument, _e.String("not exist"))
+	}
+
+	ctx, cancel := context.WithTimeout(channelCtx, time.Second*10) // default gNMI SET timeout 10s
+	defer cancel()
+
+	result, err := probe.Handle.Set(probe.Auth(ctx), r.GetRequest())
+	if err != nil {
+		err = wkr.Errpc(codes.Unavailable, _e.String(probe.Host+":"+probe.Port, err))
+	}
+	return result, err
+}
+
+// Subscribe implement target Subscribe
+func (wkr *WorkerNode) Subscribe(r *pb.SubscribeRequest, stream pb.Probe_SubscribeServer) error {
+	_e := util.NewExeErr("Subscribe", HOST, r.GetID())
+	probe := wkr.GetProbe(r.GetID())
+	if probe == nil {
+		return wkr.Errpc(codes.InvalidArgument, _e.String("not exist"))
+	}
+
+	ctx, cancel := context.WithTimeout(stream.Context(), time.Hour*2400) // default gNMI Subscribe timeout 100 day
+	defer cancel()
+
+	subHdl, err := probe.Handle.Subscribe(probe.Auth(ctx))
+	if err != nil {
+		return wkr.Errpc(codes.Unavailable, _e.String(probe.Host+":"+probe.Port, err))
+	}
+	if err := subHdl.Send(r.GetRequest()); err != nil {
+		return wkr.Errpc(codes.Unavailable, _e.String(probe.Host+":"+probe.Port, err))
+	}
+
+	for {
+		res, err := subHdl.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return wkr.Errpc(codes.Unavailable, _e.String(probe.Host+":"+probe.Port, err))
+		}
+		switch res.Response.(type) {
+		case *gnmipb.SubscribeResponse_SyncResponse:
+			//log.Info("SyncResponse received")
+		case *gnmipb.SubscribeResponse_Update:
+			if err := stream.Send(res); err != nil {
+				return wkr.Errpc(codes.Unavailable, _e.String(fmt.Sprintf("unable to forward %s:%s subscription to client %s", probe.Host, probe.Port, probe.ClientAddr), err))
+			}
+		default:
+			return wkr.Errpc(codes.Unavailable, _e.String(probe.Host+":"+probe.Port, "unexpected stream response type"))
+		}
+	}
+}
+
 type Probe struct {
+	// target parameters
 	*pb.ProbeConn
+	// client address
+	ClientAddr string
+	// target connection
+	Target *grpc.ClientConn
 	// target connection handle
 	Handle gnmipb.GNMIClient
+
 	// client bound stream outlet
 	Out *chan *pb.ProbeResponse
 	// session start time
@@ -321,6 +478,10 @@ type Probe struct {
 	Ctx     context.Context
 	Streams map[int64]context.CancelFunc
 	sLock   *sync.Mutex
+}
+
+func (p *Probe) Auth(ctx context.Context) context.Context {
+	return metadata.AppendToOutgoingContext(ctx, "username", p.GetUsr(), "password", p.GetPwd())
 }
 
 func (p *Probe) GetStreamHandle(cid int64) context.CancelFunc {
@@ -419,9 +580,9 @@ func (p *Probe) Sub(req *gnmipb.SubscribeRequest, cid, tt int64) {
 	}
 }
 
-func ConnTarget(cfg *pb.ProbeConn) (*grpc.ClientConn, error) {
+func ConnTarget(cctx context.Context, cfg *pb.ProbeConn) (*grpc.ClientConn, error) {
 	url := cfg.GetHost() + ":" + cfg.GetPort()
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Second*5))
+	ctx, cancel := context.WithTimeout(cctx, time.Duration(time.Second*10)) // default connection pending timeout 10s
 	defer cancel()
 
 	if cfg.GetTLS() {

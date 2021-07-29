@@ -3,10 +3,11 @@ module github.com/polarbroadband/gnmi/pkg/gnmiprobe
 go 1.16
 
 require (
-	github.com/openconfig/gnmi v0.0.0-20210430192044-ab96b57c5113
-	golang.org/x/net v0.0.0-20210521195947-fe42d452be8f // indirect
-	golang.org/x/sys v0.0.0-20210521203332-0cec03c779c1 // indirect
-	google.golang.org/genproto v0.0.0-20210521181308-5ccab8a35a9a // indirect
-	google.golang.org/grpc v1.38.0
-	google.golang.org/protobuf v1.26.0
+	github.com/google/protobuf v3.14.0+incompatible // indirect
+	github.com/openconfig/gnmi v0.0.0-20210707145734-c69a5df04b53
+	golang.org/x/net v0.0.0-20210726213435-c6fcb2dbf985 // indirect
+	golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c // indirect
+	google.golang.org/genproto v0.0.0-20210729151513-df9385d47c1b // indirect
+	google.golang.org/grpc v1.39.0
+	google.golang.org/protobuf v1.27.1
 )

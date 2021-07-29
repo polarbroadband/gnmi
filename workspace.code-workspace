@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "pkg/gnmiprobe"
+		},
+		{
+			"path": "pkg/probeclient"
+		},
+		{
+			"path": "probe"
+		},
+		{
+			"path": "sample"
+		}
+	],
+	"settings": {}
+}
