@@ -133,6 +133,8 @@ github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINE
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
+github.com/polarbroadband/gnmi/pkg/gnmiprobe v0.0.0-20210809202233-c4828663be8a h1:MrAAnF+VobzsELoYv5S+Z2V5+PwRmzNAr+9RUEQ2qn0=
+github.com/polarbroadband/gnmi/pkg/gnmiprobe v0.0.0-20210809202233-c4828663be8a/go.mod h1:mX0ipCmWTcEZC0Uq28DKJ6+nQdePD1RMzbCGVY/P8Nw=
 github.com/polarbroadband/goto v0.2.35 h1:0xS+rCT69KyJdTu4s4bBQjlRFgRaKXtof4yM9gDcy7U=
 github.com/polarbroadband/goto v0.2.35/go.mod h1:OmH5mPiJW0MXCgun1HMWBAiKWkI9mJbO4GFarR8YnSM=
 github.com/polarbroadband/goto v0.2.36 h1:L+G1f6aStovPM01pf5Ru09yXv13yUS8A1zYVAozaP8A=

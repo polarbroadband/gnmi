@@ -2,14 +2,14 @@ module github.com/polarbroadband/gnmi/pkg/probeclient
 
 go 1.16
 
-replace github.com/polarbroadband/gnmi/pkg/gnmiprobe => ../gnmiprobe
+// replace github.com/polarbroadband/gnmi/pkg/gnmiprobe => ../gnmiprobe
 
 require (
 	github.com/aws/aws-sdk-go v1.40.18 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/klauspost/compress v1.13.3 // indirect
 	github.com/openconfig/gnmi v0.0.0-20210707145734-c69a5df04b53
-	github.com/polarbroadband/gnmi/pkg/gnmiprobe v0.0.0-00010101000000-000000000000
+	github.com/polarbroadband/gnmi/pkg/gnmiprobe v0.0.0-20210809202233-c4828663be8a
 	github.com/polarbroadband/goto v0.2.36
 	github.com/sirupsen/logrus v1.8.1
 	go.mongodb.org/mongo-driver v1.7.1 // indirect
