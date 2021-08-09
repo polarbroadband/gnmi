@@ -35,7 +35,7 @@ var (
 
 type GNMI struct {
 	ProbeID      string
-	Param        *pb.ProbeConn
+	Param        *pb.ProbeConn `json:"gnmi_param"`
 	Probe        pb.ProbeClient
 	Token        util.AuthToken
 	Capabilities *gnmipb.CapabilityResponse

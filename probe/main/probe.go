@@ -104,7 +104,6 @@ func (nest *Nest) Sessions() int64 {
 type WorkerNode struct {
 	pb.UnimplementedProbeServer
 	*util.API
-	//*util.MongoOpr
 	*Nest
 }
 
@@ -129,21 +128,17 @@ func main() {
 	defer wkr.Nest.DisconnectAll()
 
 	// setup and run gRPC server
+	grpcTLS, err := credentials.NewServerTLSFromFile("/cert/gnmiprobe.cer", "/cert/gnmiprobe.key")
+	if err != nil {
+		wkr.Log.WithError(err).Fatal("gRPC server fail: invalid TLS keys")
+	}
+	grpcSvr := grpc.NewServer(grpc.Creds(grpcTLS), grpc.UnaryInterceptor(wkr.AuthGrpcUnary), grpc.StreamInterceptor(wkr.AuthGrpcStream))
+	pb.RegisterProbeServer(grpcSvr, &wkr)
+	// start probe grpc server
 	grpcListener, err := net.Listen("tcp", ":50051")
 	if err != nil {
 		wkr.Log.WithError(err).Fatal("gRPC server fail: unable to init tcp socket 50051")
 	}
-	// TLS
-	grpcTLS, err := credentials.NewServerTLSFromFile("/appsrc/cert/gnmiprobe.cer", "/appsrc/cert/gnmiprobe_private.key")
-	if err != nil {
-		wkr.Log.WithError(err).Fatal("gRPC server fail: invalid TLS keys")
-	}
-
-	grpcSvr := grpc.NewServer(grpc.Creds(grpcTLS), grpc.UnaryInterceptor(wkr.AuthGrpcUnary), grpc.StreamInterceptor(wkr.AuthGrpcStream))
-
-	// gRPC WorkerNode server
-	pb.RegisterProbeServer(grpcSvr, &wkr)
-
 	go func() {
 		wkr.Log.Info("gRPC server start")
 		wkr.Log.Fatal(grpcSvr.Serve(grpcListener))
