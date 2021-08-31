@@ -57,3 +57,4 @@ out-tsc/
 # IDEs and editors
 .vscode/*
 .project
+**/*.code-workspace

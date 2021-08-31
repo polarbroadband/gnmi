@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
@@ -155,12 +156,17 @@ func main() {
 					return
 				}
 				if res, ok := data.Response.(*gnmipb.SubscribeResponse_Update); ok {
-					for uf, update := range res.Update.GetUpdate() {
+					resm := map[string]interface{}{}
+					for _, update := range res.Update.GetUpdate() {
+						keyChain := []string{}
+						for _, k := range update.Path.GetElem() {
+							keyChain = append(keyChain, k.GetName())
+						}
 						var ct interface{}
 						json.Unmarshal(update.GetVal().GetJsonVal(), &ct) // string
-						fmt.Printf("--1--%v-- %v %v %v\n", uf, res.Update.GetPrefix(), res.Update.GetTimestamp(), ct)
-
+						resm[strings.Join(keyChain, "/")] = ct
 					}
+					fmt.Printf("--1---- %v %v %v\n", res.Update.GetPrefix(), res.Update.GetTimestamp(), resm)
 				}
 			}
 		}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
@@ -32,6 +33,34 @@ var (
 		UseProtoNames: true,
 	}
 )
+
+// GnmiPathToXPath convert Path elements to xpath string, no leading "/"
+func GnmiPathToXPath(p *gnmipb.Path) string {
+	if p == nil {
+		return ""
+	}
+	sb := strings.Builder{}
+	if p.Origin != "" {
+		sb.WriteString(p.Origin)
+		sb.WriteString(":")
+	}
+	elems := p.GetElem()
+	numElems := len(elems)
+	for i, pe := range elems {
+		sb.WriteString(pe.GetName())
+		for k, v := range pe.GetKey() {
+			sb.WriteString("[")
+			sb.WriteString(k)
+			sb.WriteString("=")
+			sb.WriteString(v)
+			sb.WriteString("]")
+		}
+		if i+1 != numElems {
+			sb.WriteString("/")
+		}
+	}
+	return sb.String()
+}
 
 type GNMI struct {
 	ProbeID      string
@@ -66,7 +95,7 @@ func (g *GNMI) GnInit() error {
 	}
 	g.Capabilities = c
 
-	fmt.Printf("\n++++++ %s:%s Capabilities ++++++\n%s\n", g.Param.GetHost(), g.Param.GetPort(), ProtojsonOption.Format(g.Capabilities))
+	//fmt.Printf("\n++++++ %s:%s Capabilities ++++++\n%s\n", g.Param.GetHost(), g.Param.GetPort(), ProtojsonOption.Format(g.Capabilities))
 	return nil
 
 }
